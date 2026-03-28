@@ -99,6 +99,7 @@ router.post('/request', async (req: Request, res: Response, next: NextFunction) 
 router.post('/login', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { username, password } = req.body;
+    console.log(req.body);  
     if (!username || !password) {
       res.status(400).json({ success: false, message: 'Username and password are required' });
       return;

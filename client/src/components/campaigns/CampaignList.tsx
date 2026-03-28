@@ -54,6 +54,13 @@ export const CampaignList: React.FC<CampaignListProps> = ({
       }),
   });
 
+  // Fetch all campaigns (no type filter) to build the full used-IDs exclusion list for the picker
+  const { data: allCampaignsData } = useQuery({
+    queryKey: ['campaigns', tenantFilter, 'all'],
+    queryFn: () => campaignApi.getAll({ tenantId: tenantFilter || undefined }),
+  });
+  const usedCampaignIds = (allCampaignsData?.data ?? []).map((c) => c.campaignId);
+
   const createMutation = useMutation({
     mutationFn: campaignApi.create,
     onSuccess: () => {
@@ -65,6 +72,23 @@ export const CampaignList: React.FC<CampaignListProps> = ({
       toast.error(err?.response?.data?.message || 'Failed to create campaign');
     },
   });
+
+  const handleBulkCreate = async (items: Partial<Campaign>[]) => {
+    let created = 0;
+    let failed = 0;
+    for (const item of items) {
+      try {
+        await campaignApi.create(item);
+        created++;
+      } catch {
+        failed++;
+      }
+    }
+    qc.invalidateQueries({ queryKey: ['campaigns'] });
+    if (created > 0) toast.success(`${created} campaign${created !== 1 ? 's' : ''} created`);
+    if (failed > 0) toast.error(`${failed} campaign${failed !== 1 ? 's' : ''} failed to create`);
+    setCreateOpen(false);
+  };
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<Campaign> }) =>
@@ -297,7 +321,9 @@ export const CampaignList: React.FC<CampaignListProps> = ({
         <CampaignForm
           fixedTenantId={fixedTenantId || (tenantFilter || undefined)}
           fixedCampaignTypeId={fixedCampaignTypeId || (typeFilter || undefined)}
+          excludeCampaignIds={usedCampaignIds}
           onSubmit={(d) => createMutation.mutateAsync(d)}
+          onBulkSubmit={handleBulkCreate}
           onCancel={() => setCreateOpen(false)}
           loading={createMutation.isPending}
         />

@@ -11,7 +11,9 @@ interface CampaignFormProps {
   initial?: Campaign;
   fixedTenantId?: string;
   fixedCampaignTypeId?: string;
+  excludeCampaignIds?: string[];
   onSubmit: (data: Partial<Campaign>) => Promise<unknown>;
+  onBulkSubmit?: (items: Partial<Campaign>[]) => Promise<void>;
   onCancel: () => void;
   loading?: boolean;
 }
@@ -20,7 +22,9 @@ export const CampaignForm: React.FC<CampaignFormProps> = ({
   initial,
   fixedTenantId,
   fixedCampaignTypeId,
+  excludeCampaignIds,
   onSubmit,
+  onBulkSubmit,
   onCancel,
   loading = false,
 }) => {
@@ -170,9 +174,28 @@ export const CampaignForm: React.FC<CampaignFormProps> = ({
         <InstantlyCampaignPicker
           open={pickerOpen}
           tenantId={selectedTenantId}
-          onSelect={(c: InstantlyCampaign) => {
-            set('campaignId', c.id);
-            set('name', c.name);
+          excludeIds={excludeCampaignIds}
+          onSelect={(campaigns: InstantlyCampaign[]) => {
+            if (campaigns.length === 0) return;
+            const [first, ...rest] = campaigns;
+
+            // Always fill the form with the first selected campaign
+            set('campaignId', first.id);
+            set('name', first.name);
+
+            // If multiple selected and tenant+type are ready, bulk-create the rest automatically
+            if (rest.length > 0 && onBulkSubmit && selectedTenantId && form.campaignType) {
+              const resolvedType = fixedCampaignTypeId ?? form.campaignType;
+              onBulkSubmit(
+                campaigns.map((c) => ({
+                  tenant: selectedTenantId as Campaign['tenant'],
+                  campaignType: resolvedType as Campaign['campaignType'],
+                  campaignId: c.id,
+                  name: c.name,
+                  isActive: form.isActive,
+                }))
+              );
+            }
           }}
           onClose={() => setPickerOpen(false)}
         />

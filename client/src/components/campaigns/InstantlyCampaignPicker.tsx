@@ -9,17 +9,20 @@ import { LoadingScreen } from '../ui/Spinner';
 interface InstantlyCampaignPickerProps {
   open: boolean;
   tenantId: string;
-  onSelect: (campaign: InstantlyCampaign) => void;
+  excludeIds?: string[];
+  onSelect: (campaigns: InstantlyCampaign[]) => void;
   onClose: () => void;
 }
 
 export const InstantlyCampaignPicker: React.FC<InstantlyCampaignPickerProps> = ({
   open,
   tenantId,
+  excludeIds = [],
   onSelect,
   onClose,
 }) => {
   const [search, setSearch] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['instantly-campaigns', tenantId],
@@ -28,14 +31,48 @@ export const InstantlyCampaignPicker: React.FC<InstantlyCampaignPickerProps> = (
     staleTime: 60_000,
   });
 
-  const all: InstantlyCampaign[] = data?.data ?? [];
+  const excludeSet = new Set(excludeIds);
+  const all: InstantlyCampaign[] = (data?.data ?? []).filter((c) => !excludeSet.has(c.id));
 
   const campaigns = search.trim()
     ? all.filter((c) => c.name.toLowerCase().includes(search.toLowerCase()) || c.id.toLowerCase().includes(search.toLowerCase()))
     : all;
 
-  const handleSelect = (campaign: InstantlyCampaign) => {
-    onSelect(campaign);
+  const allVisibleSelected = campaigns.length > 0 && campaigns.every((c) => selectedIds.has(c.id));
+
+  const toggleOne = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (allVisibleSelected) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        campaigns.forEach((c) => next.delete(c.id));
+        return next;
+      });
+    } else {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        campaigns.forEach((c) => next.add(c.id));
+        return next;
+      });
+    }
+  };
+
+  const handleConfirm = () => {
+    const chosen = all.filter((c) => selectedIds.has(c.id));
+    onSelect(chosen);
+    setSelectedIds(new Set());
+    onClose();
+  };
+
+  const handleClose = () => {
+    setSelectedIds(new Set());
     onClose();
   };
 
@@ -45,7 +82,7 @@ export const InstantlyCampaignPicker: React.FC<InstantlyCampaignPickerProps> = (
     'Failed to load campaigns from Instantly';
 
   return (
-    <Modal open={open} onClose={onClose} title="Browse Instantly Campaigns" size="xl">
+    <Modal open={open} onClose={handleClose} title="Browse Instantly Campaigns" size="xl">
       {/* Search */}
       <div className="mb-4">
         <div className="relative">
@@ -79,8 +116,8 @@ export const InstantlyCampaignPicker: React.FC<InstantlyCampaignPickerProps> = (
         {!isLoading && !isError && (
           <p className="mt-1 text-xs text-gray-400">
             {search.trim()
-              ? `${campaigns.length} of ${all.length} campaign${all.length !== 1 ? 's' : ''}`
-              : `${all.length} campaign${all.length !== 1 ? 's' : ''} — sorted newest first`}
+              ? `${campaigns.length} of ${all.length} available campaign${all.length !== 1 ? 's' : ''}`
+              : `${all.length} unassigned campaign${all.length !== 1 ? 's' : ''}${excludeSet.size > 0 ? ` (${excludeSet.size} already assigned hidden)` : ''} — sorted newest first`}
           </p>
         )}
       </div>
@@ -104,39 +141,71 @@ export const InstantlyCampaignPicker: React.FC<InstantlyCampaignPickerProps> = (
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-white z-10">
               <tr className="border-b border-gray-200 bg-gray-50">
+                <th className="px-3 py-2 w-8">
+                  <input
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    onChange={toggleAll}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                  />
+                </th>
                 <th className="text-left px-3 py-2 font-medium text-gray-500">Name</th>
                 <th className="text-left px-3 py-2 font-medium text-gray-500">ID</th>
                 <th className="text-left px-3 py-2 font-medium text-gray-500">Created</th>
-                <th className="px-3 py-2" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {campaigns.map((c) => (
-                <tr key={c.id} className="hover:bg-blue-50 transition-colors">
-                  <td className="px-3 py-3 font-medium text-gray-800 max-w-[220px] truncate">
-                    {c.name}
-                  </td>
-                  <td className="px-3 py-3">
-                    <code className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-mono">
-                      {c.id}
-                    </code>
-                  </td>
-                  <td className="px-3 py-3 text-gray-400 text-xs whitespace-nowrap">
-                    {new Date(c.timestamp_created).toLocaleDateString(undefined, {
-                      year: 'numeric',
-                      month: 'short',
-                      day: 'numeric',
-                    })}
-                  </td>
-                  <td className="px-3 py-3 text-right">
-                    <Button size="sm" onClick={() => handleSelect(c)}>
-                      Select
-                    </Button>
-                  </td>
-                </tr>
-              ))}
+              {campaigns.map((c) => {
+                const checked = selectedIds.has(c.id);
+                return (
+                  <tr
+                    key={c.id}
+                    onClick={() => toggleOne(c.id)}
+                    className={`cursor-pointer transition-colors ${checked ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
+                  >
+                    <td className="px-3 py-3">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleOne(c.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                      />
+                    </td>
+                    <td className="px-3 py-3 font-medium text-gray-800 max-w-[220px] truncate">
+                      {c.name}
+                    </td>
+                    <td className="px-3 py-3">
+                      <code className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-mono">
+                        {c.id}
+                      </code>
+                    </td>
+                    <td className="px-3 py-3 text-gray-400 text-xs whitespace-nowrap">
+                      {new Date(c.timestamp_created).toLocaleDateString(undefined, {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                      })}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Footer */}
+      {!isLoading && !isError && campaigns.length > 0 && (
+        <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
+          <span className="text-sm text-gray-500">
+            {selectedIds.size > 0
+              ? `${selectedIds.size} campaign${selectedIds.size !== 1 ? 's' : ''} selected`
+              : 'No campaigns selected'}
+          </span>
+          <Button onClick={handleConfirm} disabled={selectedIds.size === 0}>
+            Confirm{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
+          </Button>
         </div>
       )}
     </Modal>
