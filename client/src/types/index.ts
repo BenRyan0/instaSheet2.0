@@ -24,6 +24,13 @@ export interface Tenant {
 
 export type AddressMapping = 'direct' | 'parse' | 'skip';
 
+export interface AutoReply {
+  enabled: boolean;
+  subject: string;
+  bodyHtml: string;
+  bodyText: string;
+}
+
 export interface CampaignType {
   _id: string;
   tenant: string | Tenant;
@@ -33,6 +40,7 @@ export interface CampaignType {
   sheetHeaders: string[];
   manualColCount: number;
   addressMapping: AddressMapping;
+  autoReply: AutoReply;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;

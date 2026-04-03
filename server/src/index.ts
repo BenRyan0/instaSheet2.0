@@ -1,7 +1,7 @@
+import './env'; // must be first — loads .env before any other module reads process.env
 import express from 'express';
 import cors from 'cors';
 import mongoose from 'mongoose';
-import dotenv from 'dotenv';
 
 import authRoutes from './routes/auth';
 import tenantRoutes from './routes/tenants';
@@ -10,8 +10,6 @@ import campaignRoutes from './routes/campaigns';
 import statsRoutes from './routes/stats';
 import { errorHandler, notFound } from './middleware/errorHandler';
 import { requireAuth } from './middleware/requireAuth';
-
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;

@@ -121,7 +121,7 @@ export const Dashboard: React.FC = () => {
       </div>
 
       {/* Active breakdown */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 ">
         {[
           { label: 'Active Tenants', value: activeTenants, total: tenants.length, color: 'bg-blue-600' },
           { label: 'Active Types', value: activeTypes, total: types.length, color: 'bg-purple-600' },

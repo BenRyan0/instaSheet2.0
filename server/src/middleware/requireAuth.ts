@@ -7,7 +7,6 @@ export interface AuthRequest extends Request {
 }
 
 const JWT_SECRET = process.env.JWT_SECRET;
-console.log('[auth middleware] JWT_SECRET at module load:', JWT_SECRET ?? '⚠️ MISSING - will use fallback "changeme"');
 
 export const requireAuth = (req: AuthRequest, res: Response, next: NextFunction): void => {
   const header = req.headers.authorization;

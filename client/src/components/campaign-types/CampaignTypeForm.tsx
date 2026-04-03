@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { CampaignType, Tenant } from '../../types';
+import type { AutoReply, CampaignType, Tenant } from '../../types';
 import { Input, Textarea } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { Button } from '../ui/Button';
@@ -63,11 +63,20 @@ export const CampaignTypeForm: React.FC<CampaignTypeFormProps> = ({
     sheetHeaders: initial?.sheetHeaders ?? [...DEFAULT_HEADERS],
     manualColCount: initial?.manualColCount ?? 6,
     addressMapping: initial?.addressMapping ?? 'direct',
+    autoReply: initial?.autoReply ?? {
+      enabled: false,
+      subject: '',
+      bodyHtml: '',
+      bodyText: '',
+    } as AutoReply,
     isActive: initial?.isActive ?? true,
   });
 
-  const set = (key: string, value: string | number | boolean | string[]) =>
+  const set = (key: string, value: string | number | boolean | string[] | AutoReply) =>
     setForm((f) => ({ ...f, [key]: value }));
+
+  const setAutoReply = (key: keyof AutoReply, value: string | boolean) =>
+    setForm((f) => ({ ...f, autoReply: { ...f.autoReply, [key]: value } }));
 
   const addHeader = () => {
     const h = headerInput.trim();
@@ -136,6 +145,7 @@ export const CampaignTypeForm: React.FC<CampaignTypeFormProps> = ({
       sheetHeaders: form.sheetHeaders,
       manualColCount: Number(form.manualColCount),
       addressMapping: form.addressMapping as CampaignType['addressMapping'],
+      autoReply: form.autoReply,
       isActive: form.isActive,
     });
   };
@@ -254,6 +264,41 @@ export const CampaignTypeForm: React.FC<CampaignTypeFormProps> = ({
             </span>
           ))}
         </div>
+      </div>
+
+      {/* Auto Reply */}
+      <div className="space-y-3 rounded-lg border border-gray-200 p-4">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setAutoReply('enabled', !form.autoReply.enabled)}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              form.autoReply.enabled ? 'bg-blue-600' : 'bg-gray-300'
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                form.autoReply.enabled ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+          <span className="text-sm font-medium text-gray-700">Auto Reply</span>
+          <span className="text-xs text-gray-400">
+            Send an automated reply via Instantly after a lead is confirmed
+          </span>
+        </div>
+
+        {form.autoReply.enabled && (
+          <div className="space-y-3 pt-1">
+            <Textarea
+              label="Body (Plain Text)"
+              value={form.autoReply.bodyText}
+              onChange={(e) => setAutoReply('bodyText', e.target.value)}
+              placeholder="Hi {{firstName}}, ..."
+              rows={3}
+            />
+          </div>
+        )}
       </div>
 
       {/* Active toggle */}

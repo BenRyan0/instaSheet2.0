@@ -2,6 +2,13 @@ import mongoose, { Document, Types } from 'mongoose';
 
 export type AddressMapping = 'direct' | 'parse' | 'skip';
 
+export interface IAutoReply {
+  enabled: boolean;
+  subject: string;
+  bodyHtml: string;
+  bodyText: string;
+}
+
 export interface ICampaignType extends Document {
   tenant: Types.ObjectId;
   name: string;
@@ -10,6 +17,7 @@ export interface ICampaignType extends Document {
   sheetHeaders: string[];
   manualColCount: number;
   addressMapping: AddressMapping;
+  autoReply: IAutoReply;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -52,6 +60,12 @@ const CampaignTypeSchema = new mongoose.Schema<ICampaignType>(
       type: String,
       enum: ['direct', 'parse', 'skip'],
       default: 'direct',
+    },
+    autoReply: {
+      enabled: { type: Boolean, default: false },
+      subject: { type: String, default: '' },
+      bodyHtml: { type: String, default: '' },
+      bodyText: { type: String, default: '' },
     },
     isActive: { type: Boolean, default: true, index: true },
   },

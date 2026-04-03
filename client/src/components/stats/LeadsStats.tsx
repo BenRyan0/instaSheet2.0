@@ -29,7 +29,7 @@ const CustomTooltip: React.FC<{ active?: boolean; payload?: TooltipPayload[] }> 
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
   return (
-    <div className="bg-white border border-gray-200 rounded-lg shadow-lg px-4 py-3 text-sm">
+    <div className="bg-white border border-gray-200 rounded-lg shadow-lg px-4 py-3 text-sm ">
       <p className="font-semibold text-gray-900 mb-1">{d.campaignTypeName}</p>
       <p className="text-gray-500 text-xs mb-2">Sheet: <code className="bg-gray-100 px-1 rounded">{d.sheetName}</code></p>
       <p className="text-blue-600 font-bold">{d.leadCount.toLocaleString()} leads</p>
@@ -71,7 +71,7 @@ export const LeadsStats: React.FC = () => {
     'Failed to load sheet statistics';
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm ">
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
         <div>
@@ -116,7 +116,7 @@ export const LeadsStats: React.FC = () => {
             No campaign types found{tenantFilter ? ' for this tenant' : ''}.
           </p>
         ) : (
-          <div className="space-y-8">
+          <div className="space-y-8 ">
             {/* Summary pills */}
             <div className="flex flex-wrap gap-3">
               <div className="flex items-center gap-2 bg-blue-50 text-blue-700 rounded-lg px-4 py-2 text-sm font-medium">
