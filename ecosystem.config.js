@@ -12,11 +12,12 @@ module.exports = {
     },
     {
       name: 'mateker-client',
-      script: 'npx',
-      args: 'serve -s client/dist -l 5173',
-      interpreter: 'none',
-      autorestart: true,
-      watch: false,
+      script: 'serve',
+      env: {
+        PM2_SERVE_PATH: 'client/dist',
+        PM2_SERVE_PORT: 5173,
+        PM2_SERVE_SPA: 'true',
+      },
     },
   ],
 };
