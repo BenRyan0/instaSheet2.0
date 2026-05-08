@@ -12,8 +12,6 @@ export const errorHandler = (
   res: Response,
   _next: NextFunction
 ): void => {
-  console.error(err);
-
   // Mongoose duplicate key error
   if (err.code === 11000 && err.keyValue) {
     const field = Object.keys(err.keyValue)[0];

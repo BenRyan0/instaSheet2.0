@@ -31,6 +31,27 @@ export interface AutoReply {
   bodyText: string;
 }
 
+export interface AutoReplyFollowUp {
+  enabled: boolean;
+  intervalHours: number;
+  maxFollowUps: number;
+  bodyText: string;
+  link: string;
+}
+
+export interface DataRequestFollowUp {
+  enabled: boolean;
+  requiredFields: string[];
+  subject: string;
+  bodyText: string;
+  priorityField: string;
+}
+
+export interface Callback {
+  enabled: boolean;
+  url: string;
+}
+
 export interface CampaignType {
   _id: string;
   tenant: string | Tenant;
@@ -41,9 +62,35 @@ export interface CampaignType {
   manualColCount: number;
   addressMapping: AddressMapping;
   autoReply: AutoReply;
+  autoReplyFollowUp: AutoReplyFollowUp;
+  dataRequestFollowUp: DataRequestFollowUp;
+  replyPlaybook: Record<string, unknown> | null;
+  callback: Callback;
+  followUpReply: boolean;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface DataRequest {
+  _id: string;
+  lead_email: string;
+  campaign_id: string;
+  googleSheetId: string;
+  sheetName: string;
+  sheetRowNumber: number;
+  requestedFields: string[];
+  emailAccount: string;
+  replyEmailId: string;
+  isResolved: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DataRequestsResponse {
+  success: boolean;
+  total: number;
+  items: DataRequest[];
 }
 
 export interface Campaign {
@@ -92,4 +139,42 @@ export interface InstantlyCampaign {
   timestamp_created: string;
   status?: string | number;
   [key: string]: unknown;
+}
+
+export interface AutoReplyRecord {
+  _id: string;
+  lead_email: string;
+  campaign_id: string;
+  googleSheetId: string;
+  sheetName: string;
+  sheetRowNumber: number;
+  emailAccount: string;
+  replyEmailId: string;
+  replySubject: string;
+  followUpCount: number;
+  lastFollowUpAt: string | null;
+  isResolved: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SendingCapacityAccount {
+  accountEmail: string;
+  used: number;
+  capacity: number;
+}
+
+export interface SendingCapacityResponse {
+  success: boolean;
+  dateStr: string;
+  capacity: number;
+  totalUsed: number;
+  totalCapacity: number;
+  accounts: SendingCapacityAccount[];
+}
+
+export interface AutoReplyRecordsResponse {
+  success: boolean;
+  total: number;
+  items: AutoReplyRecord[];
 }

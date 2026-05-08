@@ -46,7 +46,41 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
 // PUT /campaign-types/:id
 router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const campaignType = await campaignTypeService.updateCampaignType(req.params.id, req.body);
+    const allowed = [
+      'name', 'sheetName', 'emailTemplate', 'sheetHeaders',
+      'manualColCount', 'addressMapping', 'isActive',
+      'autoReply', 'autoReplyFollowUp', 'dataRequestFollowUp',
+      'replyPlaybook', 'callback',
+    ];
+    const body = Object.fromEntries(
+      Object.entries(req.body).filter(([k]) => allowed.includes(k))
+    );
+
+    const { dataRequestFollowUp, sheetHeaders } = body as typeof req.body;
+
+    // Validate requiredFields against the campaign type's sheetHeaders
+    if (dataRequestFollowUp?.requiredFields?.length) {
+      const existingHeaders: string[] = sheetHeaders ??
+        (await campaignTypeService.getCampaignTypeById(req.params.id))?.sheetHeaders ?? [];
+      const invalid = (dataRequestFollowUp.requiredFields as string[]).filter(
+        (f) => !existingHeaders.includes(f)
+      );
+      if (invalid.length) {
+        res.status(400).json({
+          success: false,
+          message: `requiredFields contains values not in sheetHeaders: ${invalid.join(', ')}`,
+        });
+        return;
+      }
+    }
+
+    // Validate bodyText is present when enabled
+    if (dataRequestFollowUp?.enabled && !dataRequestFollowUp?.bodyText?.trim()) {
+      res.status(400).json({ success: false, message: 'dataRequestFollowUp.bodyText is required when enabled' });
+      return;
+    }
+
+    const campaignType = await campaignTypeService.updateCampaignType(req.params.id, body);
     if (!campaignType) {
       res.status(404).json({ success: false, message: 'Campaign type not found' });
       return;

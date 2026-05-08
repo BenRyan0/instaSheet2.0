@@ -9,6 +9,27 @@ export interface IAutoReply {
   bodyText: string;
 }
 
+export interface IAutoReplyFollowUp {
+  enabled: boolean;
+  intervalHours: number;
+  maxFollowUps: number;
+  bodyText: string;
+  link: string;
+}
+
+export interface IDataRequestFollowUp {
+  enabled: boolean;
+  requiredFields: string[];
+  subject: string;
+  bodyText: string;
+  priorityField: string;
+}
+
+export interface ICallback {
+  enabled: boolean;
+  url: string;
+}
+
 export interface ICampaignType extends Document {
   tenant: Types.ObjectId;
   name: string;
@@ -18,6 +39,11 @@ export interface ICampaignType extends Document {
   manualColCount: number;
   addressMapping: AddressMapping;
   autoReply: IAutoReply;
+  autoReplyFollowUp: IAutoReplyFollowUp;
+  dataRequestFollowUp: IDataRequestFollowUp;
+  replyPlaybook: Record<string, unknown> | null;
+  callback: ICallback;
+  followUpReply: boolean;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -62,11 +88,34 @@ const CampaignTypeSchema = new mongoose.Schema<ICampaignType>(
       default: 'direct',
     },
     autoReply: {
-      enabled: { type: Boolean, default: false },
-      subject: { type: String, default: '' },
+      enabled:  { type: Boolean, default: false },
+      subject:  { type: String, default: '' },
       bodyHtml: { type: String, default: '' },
       bodyText: { type: String, default: '' },
     },
+    autoReplyFollowUp: {
+      enabled:       { type: Boolean, default: false },
+      intervalHours: { type: Number, default: 24 },
+      maxFollowUps:  { type: Number, default: 1 },
+      bodyText:      { type: String, default: '' },
+      link:          { type: String, default: '' },
+    },
+    dataRequestFollowUp: {
+      enabled:        { type: Boolean, default: false },
+      requiredFields: { type: [String], default: [] },
+      subject:        { type: String, default: '' },
+      bodyText:       { type: String, default: '' },
+      priorityField:  { type: String, default: '' },
+    },
+    replyPlaybook: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
+    callback: {
+      enabled: { type: Boolean, default: false },
+      url:     { type: String, default: '' },
+    },
+    followUpReply: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true, index: true },
   },
   { timestamps: true }

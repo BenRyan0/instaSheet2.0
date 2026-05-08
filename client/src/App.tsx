@@ -14,6 +14,8 @@ const CampaignsPage = lazy(() => import('./pages/CampaignsPage'));
 const AccessRequestsPage = lazy(() =>
   import('./pages/AccessRequestsPage').then((m) => ({ default: m.AccessRequestsPage }))
 );
+const DataRequestsPage = lazy(() => import('./pages/DataRequestsPage'));
+const AutoReplyMonitorPage = lazy(() => import('./pages/AutoReplyMonitorPage'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -53,6 +55,14 @@ const AppRoutes: React.FC = () => (
         <Route
           path="/access-requests"
           element={<Suspense fallback={<LoadingScreen />}><AccessRequestsPage /></Suspense>}
+        />
+        <Route
+          path="/data-requests"
+          element={<Suspense fallback={<LoadingScreen />}><DataRequestsPage /></Suspense>}
+        />
+        <Route
+          path="/auto-reply-monitor"
+          element={<Suspense fallback={<LoadingScreen />}><AutoReplyMonitorPage /></Suspense>}
         />
       </Route>
     </Route>

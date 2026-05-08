@@ -8,6 +8,11 @@ import type {
   InstantlyCampaign,
   SheetLeadCount,
   AuthUser,
+  DataRequest,
+  DataRequestsResponse,
+  AutoReplyRecord,
+  AutoReplyRecordsResponse,
+  SendingCapacityResponse,
 } from '../types';
 
 const api = axios.create({
@@ -94,12 +99,44 @@ export const campaignTypeApi = {
 
 // ── Stats ─────────────────────────────────────────────────
 export const statsApi = {
-  getLeads: (tenantId?: string) =>
+  getLeads: (tenantId?: string, force?: boolean) =>
     api
-      .get<ApiResponse<SheetLeadCount[]>>('/stats/leads', {
-        params: tenantId ? { tenantId } : {},
+      .get<ApiResponse<SheetLeadCount[]> & { cachedAt?: number }>('/stats/leads', {
+        params: {
+          ...(tenantId ? { tenantId } : {}),
+          ...(force ? { force: 'true' } : {}),
+        },
       })
       .then((r) => r.data),
+  getSendingCapacity: () =>
+    api.get<SendingCapacityResponse>('/stats/sending-capacity').then((r) => r.data),
+};
+
+// ── Data Requests ─────────────────────────────────────────
+export const dataRequestApi = {
+  getAll: (params?: { isResolved?: boolean; sheetName?: string; campaignId?: string; limit?: number; skip?: number }) =>
+    api.get<DataRequestsResponse>('/data-requests', { params }).then((r) => r.data),
+  getById: (id: string) =>
+    api.get<ApiResponse<DataRequest>>(`/data-requests/${id}`).then((r) => r.data),
+  resolve: (id: string) =>
+    api.patch<ApiResponse<DataRequest>>(`/data-requests/${id}/resolve`).then((r) => r.data),
+};
+
+// ── Auto-Reply Records ────────────────────────────────────
+export const autoReplyRecordApi = {
+  getAll: (params?: {
+    isResolved?: boolean;
+    sheetName?: string;
+    campaignId?: string;
+    hasFollowUps?: boolean;
+    limit?: number;
+    skip?: number;
+  }) =>
+    api.get<AutoReplyRecordsResponse>('/auto-reply-records', { params }).then((r) => r.data),
+  getById: (id: string) =>
+    api.get<ApiResponse<AutoReplyRecord>>(`/auto-reply-records/${id}`).then((r) => r.data),
+  resolve: (id: string) =>
+    api.patch<ApiResponse<AutoReplyRecord>>(`/auto-reply-records/${id}/resolve`).then((r) => r.data),
 };
 
 // ── Campaigns ────────────────────────────────────────────

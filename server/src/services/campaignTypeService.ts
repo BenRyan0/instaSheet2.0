@@ -22,7 +22,7 @@ export const createCampaignType = async (data: Partial<ICampaignType>) => {
 };
 
 export const updateCampaignType = async (id: string, data: Partial<ICampaignType>) => {
-  return CampaignType.findByIdAndUpdate(id, data, { new: true, runValidators: true }).lean();
+  return CampaignType.findByIdAndUpdate(id, { $set: data }, { new: true, runValidators: true }).lean();
 };
 
 export const deleteCampaignType = async (id: string) => {

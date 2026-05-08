@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import type { AutoReply, CampaignType, Tenant } from '../../types';
+import React, { useState, useRef } from 'react';
+import type { AutoReply, AutoReplyFollowUp, DataRequestFollowUp, Callback, CampaignType, Tenant } from '../../types';
 import { Input, Textarea } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { Button } from '../ui/Button';
@@ -48,6 +48,8 @@ export const CampaignTypeForm: React.FC<CampaignTypeFormProps> = ({
 }) => {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [headerInput, setHeaderInput] = useState('');
+  const [followUpDragOver, setFollowUpDragOver] = useState(false);
+  const followUpBodyRef = useRef<HTMLTextAreaElement>(null);
 
   const resolveTenantId = () => {
     if (fixedTenantId) return fixedTenantId;
@@ -69,14 +71,77 @@ export const CampaignTypeForm: React.FC<CampaignTypeFormProps> = ({
       bodyHtml: '',
       bodyText: '',
     } as AutoReply,
+    autoReplyFollowUp: initial?.autoReplyFollowUp ?? {
+      enabled: false,
+      intervalHours: 24,
+      maxFollowUps: 1,
+      bodyText: '',
+      link: '',
+    } as AutoReplyFollowUp,
+    dataRequestFollowUp: initial?.dataRequestFollowUp ?? {
+      enabled: false,
+      requiredFields: [],
+      subject: '',
+      bodyText: '',
+      priorityField: '',
+    } as DataRequestFollowUp,
+    replyPlaybook: initial?.replyPlaybook ? JSON.stringify(initial.replyPlaybook, null, 2) : '',
+    callback: initial?.callback ?? { enabled: false, url: '' } as Callback,
+    followUpReply: initial?.followUpReply ?? false,
     isActive: initial?.isActive ?? true,
   });
 
-  const set = (key: string, value: string | number | boolean | string[] | AutoReply) =>
+  const set = (key: string, value: string | number | boolean | string[] | AutoReply | AutoReplyFollowUp | DataRequestFollowUp | Callback) =>
     setForm((f) => ({ ...f, [key]: value }));
 
   const setAutoReply = (key: keyof AutoReply, value: string | boolean) =>
     setForm((f) => ({ ...f, autoReply: { ...f.autoReply, [key]: value } }));
+
+  const setAutoReplyFollowUp = (key: keyof AutoReplyFollowUp, value: string | boolean | number) =>
+    setForm((f) => ({ ...f, autoReplyFollowUp: { ...f.autoReplyFollowUp, [key]: value } }));
+
+  const setDataRequestFollowUp = (key: keyof DataRequestFollowUp, value: string | boolean | string[]) =>
+    setForm((f) => ({ ...f, dataRequestFollowUp: { ...f.dataRequestFollowUp, [key]: value } }));
+
+  const setCallback = (key: keyof Callback, value: string | boolean) =>
+    setForm((f) => ({ ...f, callback: { ...f.callback, [key]: value } }));
+
+  const insertFollowUpPlaceholder = (header: string) => {
+    const token = `{{${header}}}`;
+    const el = followUpBodyRef.current;
+    const current = form.autoReplyFollowUp.bodyText;
+    if (!el) { setAutoReplyFollowUp('bodyText', current + token); return; }
+    const start = el.selectionStart ?? current.length;
+    const end = el.selectionEnd ?? current.length;
+    setAutoReplyFollowUp('bodyText', current.slice(0, start) + token + current.slice(end));
+    requestAnimationFrame(() => {
+      el.focus();
+      el.selectionStart = el.selectionEnd = start + token.length;
+    });
+  };
+
+  const handleFollowUpDrop = (e: React.DragEvent<HTMLTextAreaElement>) => {
+    const token = e.dataTransfer.getData('text/plain');
+    if (!token.startsWith('{{')) return;
+    e.preventDefault();
+    setFollowUpDragOver(false);
+    const el = e.currentTarget;
+    const pos = el.selectionStart ?? form.autoReplyFollowUp.bodyText.length;
+    const current = form.autoReplyFollowUp.bodyText;
+    setAutoReplyFollowUp('bodyText', current.slice(0, pos) + token + current.slice(pos));
+    requestAnimationFrame(() => {
+      el.focus();
+      el.selectionStart = el.selectionEnd = pos + token.length;
+    });
+  };
+
+  const toggleRequiredField = (header: string) => {
+    const current = form.dataRequestFollowUp.requiredFields;
+    const next = current.includes(header)
+      ? current.filter((h) => h !== header)
+      : [...current, header];
+    setDataRequestFollowUp('requiredFields', next);
+  };
 
   const addHeader = () => {
     const h = headerInput.trim();
@@ -130,6 +195,9 @@ export const CampaignTypeForm: React.FC<CampaignTypeFormProps> = ({
     if (!form.tenant) e.tenant = 'Tenant is required';
     if (!form.name.trim()) e.name = 'Name is required';
     if (!form.sheetName.trim()) e.sheetName = 'Sheet name is required';
+    if (form.replyPlaybook.trim()) {
+      try { JSON.parse(form.replyPlaybook); } catch { e.replyPlaybook = 'Invalid JSON'; }
+    }
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -146,6 +214,11 @@ export const CampaignTypeForm: React.FC<CampaignTypeFormProps> = ({
       manualColCount: Number(form.manualColCount),
       addressMapping: form.addressMapping as CampaignType['addressMapping'],
       autoReply: form.autoReply,
+      autoReplyFollowUp: form.autoReplyFollowUp,
+      dataRequestFollowUp: form.dataRequestFollowUp,
+      replyPlaybook: form.replyPlaybook.trim() ? JSON.parse(form.replyPlaybook) : null,
+      callback: form.callback,
+      followUpReply: form.followUpReply,
       isActive: form.isActive,
     });
   };
@@ -291,14 +364,272 @@ export const CampaignTypeForm: React.FC<CampaignTypeFormProps> = ({
         {form.autoReply.enabled && (
           <div className="space-y-3 pt-1">
             <Textarea
-              label="Body (Plain Text)"
+              label="Email Body"
               value={form.autoReply.bodyText}
               onChange={(e) => setAutoReply('bodyText', e.target.value)}
               placeholder="Hi {{firstName}}, ..."
-              rows={3}
+              rows={4}
+              hint="Placeholders: {{firstName}}, {{Company Name}}, {{sendingAccountName}}"
             />
           </div>
         )}
+      </div>
+
+      {/* Auto Reply Follow-Up */}
+      <div className="space-y-3 rounded-lg border border-gray-200 p-4">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setAutoReplyFollowUp('enabled', !form.autoReplyFollowUp.enabled)}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              form.autoReplyFollowUp.enabled ? 'bg-blue-600' : 'bg-gray-300'
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                form.autoReplyFollowUp.enabled ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+          <span className="text-sm font-medium text-gray-700">Auto Reply Follow-Up</span>
+          <span className="text-xs text-gray-400">
+            Send a follow-up to leads who never replied to the auto-reply
+          </span>
+        </div>
+
+        {form.autoReplyFollowUp.enabled && (
+          <div className="space-y-3 pt-1">
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label="Interval (hours)"
+                type="number"
+                min={1}
+                value={form.autoReplyFollowUp.intervalHours}
+                onChange={(e) => setAutoReplyFollowUp('intervalHours', Number(e.target.value))}
+                hint="Hours to wait before sending"
+              />
+              <Input
+                label="Max Follow-Ups"
+                type="number"
+                min={1}
+                value={form.autoReplyFollowUp.maxFollowUps}
+                onChange={(e) => setAutoReplyFollowUp('maxFollowUps', Number(e.target.value))}
+                hint="Per lead"
+              />
+            </div>
+            {/* Email Body with drag-to-insert */}
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-gray-700">Email Body</label>
+                <span className="text-xs text-gray-400">drag or click a column to insert</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5 rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-2 max-h-24 overflow-y-auto">
+                {form.sheetHeaders.map((h) => (
+                  <span
+                    key={h}
+                    draggable
+                    onDragStart={(e) => e.dataTransfer.setData('text/plain', `{{${h}}}`)}
+                    onClick={() => insertFollowUpPlaceholder(h)}
+                    title={`Insert {{${h}}}`}
+                    className="cursor-grab active:cursor-grabbing select-none inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors"
+                  >
+                    {h}
+                  </span>
+                ))}
+              </div>
+              <textarea
+                ref={followUpBodyRef}
+                rows={6}
+                value={form.autoReplyFollowUp.bodyText}
+                onChange={(e) => setAutoReplyFollowUp('bodyText', e.target.value)}
+                onDragOver={(e) => { e.preventDefault(); setFollowUpDragOver(true); }}
+                onDragLeave={() => setFollowUpDragOver(false)}
+                onDrop={handleFollowUpDrop}
+                placeholder={`Hi {{Lead First Name}},\n\nJust following up...\n\n{{sendingAccountName}}`}
+                className={`block w-full rounded-lg border px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition resize-y ${
+                  followUpDragOver ? 'border-blue-400 bg-blue-50 ring-2 ring-blue-300' : 'border-gray-300 bg-white'
+                }`}
+              />
+              <p className="text-xs text-gray-500">Placeholders: {'{{firstName}}'}, {'{{Company Name}}'}, {'{{sendingAccountName}}'}, {'{{link}}'}</p>
+            </div>
+            <Input
+              label="Link URL"
+              value={form.autoReplyFollowUp.link}
+              onChange={(e) => setAutoReplyFollowUp('link', e.target.value)}
+              placeholder="https://example.com"
+              hint="Injected into {{link}} placeholder"
+            />
+            <p className="text-xs text-blue-600 bg-blue-50 rounded-lg px-3 py-2">
+              Subject is not configurable — the follow-up reuses the original email thread subject.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Data Request Follow-Up */}
+      <div className="space-y-3 rounded-lg border border-gray-200 p-4">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setDataRequestFollowUp('enabled', !form.dataRequestFollowUp.enabled)}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              form.dataRequestFollowUp.enabled ? 'bg-blue-600' : 'bg-gray-300'
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                form.dataRequestFollowUp.enabled ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+          <span className="text-sm font-medium text-gray-700">Data Request Follow-Up</span>
+          <span className="text-xs text-gray-400">
+            Send a follow-up when required fields are blank after encoding a lead
+          </span>
+        </div>
+
+        {form.dataRequestFollowUp.enabled && (
+          <div className="space-y-3 pt-1">
+            {/* Required Fields multi-select */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-gray-700">
+                Required Fields
+                <span className="ml-2 text-xs font-normal text-gray-400">
+                  select from sheet headers — blank values trigger a follow-up
+                </span>
+              </label>
+              <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto rounded-lg border border-gray-200 p-3">
+                {form.sheetHeaders.map((h) => {
+                  const selected = form.dataRequestFollowUp.requiredFields.includes(h);
+                  return (
+                    <button
+                      key={h}
+                      type="button"
+                      onClick={() => toggleRequiredField(h)}
+                      className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                        selected
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      {h}
+                    </button>
+                  );
+                })}
+              </div>
+              {form.dataRequestFollowUp.requiredFields.length > 0 && (
+                <p className="text-xs text-gray-400">
+                  Selected: {form.dataRequestFollowUp.requiredFields.join(', ')}
+                </p>
+              )}
+            </div>
+
+            <Textarea
+              label="Follow-Up Body"
+              value={form.dataRequestFollowUp.bodyText}
+              onChange={(e) => setDataRequestFollowUp('bodyText', e.target.value)}
+              placeholder={'Hi {{Company Name}},\n\nThank you for your interest!\n\n{{sendingAccountName}}'}
+              rows={5}
+              hint="Supported placeholders: {{sendingAccountName}}"
+            />
+
+            {/* Priority Field */}
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-gray-700">
+                Priority Field
+                <span className="ml-2 text-xs font-normal text-gray-400">
+                  if provided, resolves the data request as soon as this field is filled
+                </span>
+              </label>
+              <select
+                value={form.dataRequestFollowUp.priorityField}
+                onChange={(e) => setDataRequestFollowUp('priorityField', e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">— none —</option>
+                {form.dataRequestFollowUp.requiredFields.map((f) => (
+                  <option key={f} value={f}>{f}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Reply Playbook */}
+      <div className="space-y-3 rounded-lg border border-gray-200 p-4">
+        <div>
+          <p className="text-sm font-medium text-gray-700">Reply Playbook</p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            JSON object defining reply categories / sub-variants. Leave blank to disable classification.
+          </p>
+        </div>
+        <textarea
+          rows={6}
+          value={form.replyPlaybook}
+          onChange={(e) => set('replyPlaybook', e.target.value)}
+          placeholder={'{\n  "Interested": ["Ready to book", "Needs more info"],\n  "Not interested": ["Price", "Timing"]\n}'}
+          className={`block w-full rounded-lg border px-3 py-2 text-sm font-mono text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y ${
+            errors.replyPlaybook ? 'border-red-400' : 'border-gray-300'
+          }`}
+        />
+        {errors.replyPlaybook && (
+          <p className="text-xs text-red-500">{errors.replyPlaybook}</p>
+        )}
+      </div>
+
+      {/* Callback */}
+      <div className="space-y-3 rounded-lg border border-gray-200 p-4">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setCallback('enabled', !form.callback.enabled)}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              form.callback.enabled ? 'bg-blue-600' : 'bg-gray-300'
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                form.callback.enabled ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+          <span className="text-sm font-medium text-gray-700">Outbound Callback</span>
+          <span className="text-xs text-gray-400">
+            POST processed reply data to an external URL
+          </span>
+        </div>
+
+        {form.callback.enabled && (
+          <Input
+            label="Callback URL"
+            value={form.callback.url}
+            onChange={(e) => setCallback('url', e.target.value)}
+            placeholder="https://hooks.example.com/reply"
+            hint="Receives a POST with the processed follow-up reply payload"
+          />
+        )}
+      </div>
+
+      {/* Follow-Up Reply */}
+      <div className="flex items-center gap-3 rounded-lg border border-gray-200 p-4">
+        <button
+          type="button"
+          onClick={() => set('followUpReply', !form.followUpReply)}
+          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+            form.followUpReply ? 'bg-blue-600' : 'bg-gray-300'
+          }`}
+        >
+          <span
+            className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+              form.followUpReply ? 'translate-x-6' : 'translate-x-1'
+            }`}
+          />
+        </button>
+        <span className="text-sm font-medium text-gray-700">Follow-Up Reply</span>
+        <span className="text-xs text-gray-400">
+          Enable follow-up reply handling for this campaign type
+        </span>
       </div>
 
       {/* Active toggle */}

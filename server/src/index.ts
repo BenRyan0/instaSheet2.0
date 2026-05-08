@@ -8,6 +8,8 @@ import tenantRoutes from './routes/tenants';
 import campaignTypeRoutes from './routes/campaignTypes';
 import campaignRoutes from './routes/campaigns';
 import statsRoutes from './routes/stats';
+import dataRequestRoutes from './routes/dataRequests';
+import autoReplyRecordRoutes from './routes/autoReplyRecords';
 import { errorHandler, notFound } from './middleware/errorHandler';
 import { requireAuth } from './middleware/requireAuth';
 
@@ -33,6 +35,8 @@ app.use('/api/tenants', requireAuth, tenantRoutes);
 app.use('/api/campaign-types', requireAuth, campaignTypeRoutes);
 app.use('/api/campaigns', requireAuth, campaignRoutes);
 app.use('/api/stats', requireAuth, statsRoutes);
+app.use('/api/data-requests', requireAuth, dataRequestRoutes);
+app.use('/api/auto-reply-records', requireAuth, autoReplyRecordRoutes);
 
 // Error handling
 app.use(notFound);

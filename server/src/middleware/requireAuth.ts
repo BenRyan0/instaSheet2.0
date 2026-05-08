@@ -12,7 +12,6 @@ export const requireAuth = (req: AuthRequest, res: Response, next: NextFunction)
   const header = req.headers.authorization;
 
   if (!header?.startsWith('Bearer ')) {
-    console.log('[requireAuth] Missing or malformed Authorization header');
     res.status(401).json({ success: false, message: 'Unauthorized' });
     return;
   }
@@ -27,12 +26,7 @@ export const requireAuth = (req: AuthRequest, res: Response, next: NextFunction)
     req.userId = payload.userId;
     req.username = payload.username;
     next();
-  } catch (err) {
-    const e = err as { name?: string; message?: string; expiredAt?: Date };
-    console.log('[requireAuth] JWT verification failed');
-    console.log('  reason :', e.name, '-', e.message);
-    console.log('  secret :', JWT_SECRET ? `loaded from env (${JWT_SECRET.slice(0, 4)}…)` : 'using fallback "changeme"');
-    if (e.expiredAt) console.log('  expired:', e.expiredAt.toISOString());
+  } catch {
     res.status(401).json({ success: false, message: 'Token invalid or expired' });
   }
 };

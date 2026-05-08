@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { tenantApi, campaignTypeApi, campaignApi } from '../api/client';
+import { tenantApi, campaignTypeApi, campaignApi, statsApi } from '../api/client';
 import { LoadingScreen } from '../components/ui/Spinner';
 import { LeadsStats } from '../components/stats/LeadsStats';
+import type { Tenant, CampaignType } from '../types';
 
 interface StatCardProps {
   label: string;
@@ -53,6 +54,74 @@ const RecentRow: React.FC<{ name: string; slug?: string; active: boolean; date: 
   </div>
 );
 
+const SheetLinksSection: React.FC<{ tenants: Tenant[]; types: CampaignType[] }> = ({ tenants, types }) => {
+  const [openId, setOpenId] = useState<string | null>(null);
+
+  if (tenants.length === 0) return null;
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+      <div className="flex items-center gap-2 mb-4">
+        <svg className="w-4 h-4 text-green-600" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M19 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2zm-7 3a1 1 0 110 2 1 1 0 010-2zm-4 0a1 1 0 110 2 1 1 0 010-2zm8 0a1 1 0 110 2 1 1 0 010-2zM8 10h8v8H8v-8z" />
+        </svg>
+        <h3 className="text-sm font-semibold text-gray-900">Sheets Quick Access</h3>
+      </div>
+      <div className="grid grid-cols-3 items-start justify-start">
+        {tenants.map((tenant) => {
+          const tenantTypes = types.filter(
+            (ct) => (typeof ct.tenant === 'string' ? ct.tenant : (ct.tenant as Tenant)._id) === tenant._id
+          );
+          const isOpen = openId === tenant._id;
+
+          return (
+            <div key={tenant._id} className="flex items-center justify-between gap-4 py-1 px-5">
+              <span className="text-sm font-medium text-gray-700 truncate min-w-0 flex-1">{tenant.name}</span>
+              <div className="relative w-44">
+                <button
+                  onClick={() => setOpenId(isOpen ? null : tenant._id)}
+                  disabled={tenantTypes.length === 0 || !tenant.googleSheetId}
+                  className="w-full flex items-center gap-2 text-sm border border-gray-300 rounded-lg px-3 py-1.5 hover:border-green-400 hover:bg-green-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <svg className="w-4 h-4 text-green-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <path d="M3 9h18M3 15h18M9 3v18" />
+                  </svg>
+                  <span className="flex-1 text-left">{tenantTypes.length === 0 ? 'No sheets' : `${tenantTypes.length} sheet${tenantTypes.length > 1 ? 's' : ''}`}</span>
+                  <svg className={`w-3.5 h-3.5 text-gray-400 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+
+                {isOpen && tenantTypes.length > 0 && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setOpenId(null)} />
+                    <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 w-full overflow-hidden ">
+                      {tenantTypes.map((ct) => (
+                        <a
+                          key={ct._id}
+                          href={`https://docs.google.com/spreadsheets/d/${tenant.googleSheetId}/edit`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => setOpenId(null)}
+                          className="flex items-center justify-start py-2 px-2 gap-5 hover:bg-gray-50 border-b border-gray-100 last:border-0 group"
+                        >
+                          {/* <span className="text-sm text-gray-800 group-hover:text-green-700 font-medium truncate">{ct.name}</span> */}
+                          <span className="text-xs text-gray-400 font-mono shrink-0 px-1.5 py-0.5 rounded">{ct.sheetName}</span>
+                        </a>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 export const Dashboard: React.FC = () => {
   const { data: tenantsData, isLoading: tLoading } = useQuery({
     queryKey: ['tenants'],
@@ -65,6 +134,11 @@ export const Dashboard: React.FC = () => {
   const { data: campaignsData, isLoading: cLoading } = useQuery({
     queryKey: ['campaigns'],
     queryFn: () => campaignApi.getAll(),
+  });
+  const { data: capacityData } = useQuery({
+    queryKey: ['sending-capacity'],
+    queryFn: () => statsApi.getSendingCapacity(),
+    staleTime: 60_000,
   });
 
   const isLoading = tLoading || ctLoading || cLoading;
@@ -143,6 +217,69 @@ export const Dashboard: React.FC = () => {
           </div>
         ))}
       </div>
+
+      {/* Sheets Quick Access */}
+      <SheetLinksSection tenants={tenants} types={types} />
+
+      {/* Sending Capacity */}
+      {capacityData && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4 ">
+          <div className="flex items-center justify-between ">
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900">Sending Capacity Today</h3>
+              <p className="text-xs text-gray-400 mt-0.5">{capacityData.dateStr} · {capacityData.capacity} emails / account limit</p>
+            </div>
+            <div className="text-right">
+              <p className="text-2xl font-bold text-gray-900">
+                {capacityData.totalUsed}
+                <span className="text-sm font-normal text-gray-400"> / {capacityData.totalCapacity}</span>
+              </p>
+              <p className="text-xs text-gray-400">total sent today</p>
+            </div>
+          </div>
+
+          {/* Total bar */}
+          <div className="w-full bg-gray-100 rounded-full h-2.5 ">
+            <div
+              className={`h-2.5 rounded-full transition-all ${
+                capacityData.totalCapacity > 0 && capacityData.totalUsed / capacityData.totalCapacity >= 0.9
+                  ? 'bg-red-500'
+                  : capacityData.totalCapacity > 0 && capacityData.totalUsed / capacityData.totalCapacity >= 0.7
+                  ? 'bg-amber-500'
+                  : 'bg-blue-600'
+              }`}
+              style={{
+                width: capacityData.totalCapacity > 0
+                  ? `${Math.min((capacityData.totalUsed / capacityData.totalCapacity) * 100, 100)}%`
+                  : '0%',
+              }}
+            />
+          </div>
+
+          {/* Per-account breakdown */}
+          {capacityData.accounts.length > 0 && (
+            <div className="space-y-1.5 pt-1 max-h-64 overflow-y-auto grid grid-cols-1 lg:grid-cols-3 2xl:grid-cols-5 ">
+              {capacityData.accounts.map((a) => {
+                const atLimit = a.used >= a.capacity;
+                return (
+                  <div key={a.accountEmail} className="flex items-center justify-between gap-3 px-2 ">
+                    <p className="text-sm text-gray-600 truncate" title={a.accountEmail}>
+                      {a.accountEmail}
+                    </p>
+                    <p className={`text-sm font-semibold shrink-0 ${atLimit ? 'text-red-600' : 'text-gray-500'}`}>
+                      {a.used} / {a.capacity}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {capacityData.accounts.length === 0 && (
+            <p className="text-sm text-gray-400 text-center py-2">No emails sent today yet</p>
+          )}
+        </div>
+      )}
 
       {/* Leads statistics */}
       <LeadsStats />

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   BarChart,
   Bar,
@@ -29,7 +29,7 @@ const CustomTooltip: React.FC<{ active?: boolean; payload?: TooltipPayload[] }> 
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
   return (
-    <div className="bg-white border border-gray-200 rounded-lg shadow-lg px-4 py-3 text-sm ">
+    <div className="bg-white border border-gray-200 rounded-lg shadow-lg px-4 py-3 text-sm">
       <p className="font-semibold text-gray-900 mb-1">{d.campaignTypeName}</p>
       <p className="text-gray-500 text-xs mb-2">Sheet: <code className="bg-gray-100 px-1 rounded">{d.sheetName}</code></p>
       <p className="text-blue-600 font-bold">{d.leadCount.toLocaleString()} leads</p>
@@ -38,18 +38,31 @@ const CustomTooltip: React.FC<{ active?: boolean; payload?: TooltipPayload[] }> 
   );
 };
 
+function formatCacheAge(cachedAt: number): string {
+  const diffMs = Date.now() - cachedAt;
+  const diffMin = Math.floor(diffMs / 60_000);
+  if (diffMin < 1) return 'just now';
+  return `${diffMin}m ago`;
+}
+
 export const LeadsStats: React.FC = () => {
   const [tenantFilter, setTenantFilter] = useState('');
+  const [cachedAt, setCachedAt] = useState<number | null>(null);
+  const queryClient = useQueryClient();
 
   const { data: tenantsData } = useQuery({
     queryKey: ['tenants'],
     queryFn: () => tenantApi.getAll(),
   });
 
-  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
+  const { data, isLoading, isError, error, isFetching } = useQuery({
     queryKey: ['stats-leads', tenantFilter],
-    queryFn: () => statsApi.getLeads(tenantFilter || undefined),
-    staleTime: 2 * 60 * 1000,
+    queryFn: async () => {
+      const result = await statsApi.getLeads(tenantFilter || undefined);
+      if (result.cachedAt) setCachedAt(result.cachedAt);
+      return result;
+    },
+    staleTime: 5 * 60 * 1000,
   });
 
   const tenants: Tenant[] = tenantsData?.data ?? [];
@@ -58,7 +71,6 @@ export const LeadsStats: React.FC = () => {
   const totalLeads = rows.reduce((sum, r) => sum + r.leadCount, 0);
   const errorsCount = rows.filter((r) => r.error).length;
 
-  // Group by tenant for the table view
   const byTenant = tenants.reduce<Record<string, SheetLeadCount[]>>((acc, t) => {
     const items = rows.filter((r) => r.tenantId === t._id);
     if (items.length) acc[t.name] = items;
@@ -70,13 +82,29 @@ export const LeadsStats: React.FC = () => {
     (error as Error)?.message ||
     'Failed to load sheet statistics';
 
+  const handleForceRefresh = async () => {
+    await queryClient.invalidateQueries({ queryKey: ['stats-leads', tenantFilter] });
+    const freshData = await statsApi.getLeads(tenantFilter || undefined, true);
+    queryClient.setQueryData(['stats-leads', tenantFilter], freshData);
+    if (freshData.cachedAt) setCachedAt(freshData.cachedAt);
+  };
+
+  const handleRetry = async () => {
+    await queryClient.invalidateQueries({ queryKey: ['stats-leads', tenantFilter] });
+  };
+
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm ">
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
         <div>
           <h3 className="text-sm font-semibold text-gray-900">Leads per Campaign Type</h3>
-          <p className="text-xs text-gray-400 mt-0.5">Counts rows from each tenant's Google Sheet tab</p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            Counts rows from each tenant's Google Sheet tab
+            {cachedAt && (
+              <span className="ml-2 text-gray-300">· cached {formatCacheAge(cachedAt)}</span>
+            )}
+          </p>
         </div>
         <div className="flex items-center gap-3">
           <Select
@@ -91,7 +119,7 @@ export const LeadsStats: React.FC = () => {
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => refetch()}
+            onClick={handleForceRefresh}
             disabled={isFetching}
           >
             {isFetching ? 'Refreshing…' : 'Refresh'}
@@ -109,14 +137,14 @@ export const LeadsStats: React.FC = () => {
         ) : isError ? (
           <div className="text-center py-12">
             <p className="text-sm text-red-500 mb-3">{errMsg}</p>
-            <Button variant="secondary" size="sm" onClick={() => refetch()}>Retry</Button>
+            <Button variant="secondary" size="sm" onClick={handleRetry}>Retry</Button>
           </div>
         ) : rows.length === 0 ? (
           <p className="text-center py-12 text-sm text-gray-400">
             No campaign types found{tenantFilter ? ' for this tenant' : ''}.
           </p>
         ) : (
-          <div className="space-y-8 ">
+          <div className="space-y-8">
             {/* Summary pills */}
             <div className="flex flex-wrap gap-3">
               <div className="flex items-center gap-2 bg-blue-50 text-blue-700 rounded-lg px-4 py-2 text-sm font-medium">
@@ -188,8 +216,7 @@ export const LeadsStats: React.FC = () => {
                           </td>
                           <td className="px-4 py-3 text-right">
                             {item.error ? (
-                              <span className="inline-flex items-center gap-1 text-xs text-red-500"
-                                title={item.error}>
+                              <span className="inline-flex items-center gap-1 text-xs text-red-500" title={item.error}>
                                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                                     d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
