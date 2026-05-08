@@ -2,7 +2,6 @@ import './env'; // must be first — loads .env before any other module reads pr
 import express from 'express';
 import cors from 'cors';
 import mongoose from 'mongoose';
-import path from 'path';
 
 import authRoutes from './routes/auth';
 import tenantRoutes from './routes/tenants';
@@ -38,13 +37,6 @@ app.use('/api/campaigns', requireAuth, campaignRoutes);
 app.use('/api/stats', requireAuth, statsRoutes);
 app.use('/api/data-requests', requireAuth, dataRequestRoutes);
 app.use('/api/auto-reply-records', requireAuth, autoReplyRecordRoutes);
-
-// Serve React client in production
-if (process.env.NODE_ENV === 'production') {
-  const clientDist = path.join(__dirname, '../../client/dist');
-  app.use(express.static(clientDist));
-  app.get('*', (_req, res) => res.sendFile(path.join(clientDist, 'index.html')));
-}
 
 // Error handling
 app.use(notFound);
