@@ -12,8 +12,8 @@ module.exports = {
     },
     {
       name: 'mateker-client',
-      script: 'serve',
-      args: '-s client/dist -l 5173',
+      script: 'npx',
+      args: 'serve -s client/dist -l 5173',
       interpreter: 'none',
       autorestart: true,
       watch: false,
